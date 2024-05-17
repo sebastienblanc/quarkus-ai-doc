@@ -1,0 +1,82 @@
+# Document Retrieval for Language Models
+
+Many applications involving Large Language Models (LLMs) often require user-specific data beyond their training set, such as CSV files, data from various sources, or reports. To achieve this, the process of Retrieval Augmented Generation (RAG) is commonly employed.
+
+## Understanding the Data Ingestion Journey
+
+Before delving into the RAG process, it’s crucial to delineate two distinct phases:
+
+* **The Data Ingestion Process**\
+Involves data collection, cleaning, transformation, and adding metadata, resulting in a set of vectorized documents stored in a database.
+* **The RAG Process**\
+Before engaging with the LLM, it seeks relevant documents in the database and passes them for model augmentation.
+
+![width=1000](chatbot-architecture.png)
+
+## Unveiling Embeddings
+
+Embeddings denote data representations, typically in a lower-dimensional space (arrays of floats), preserving essential characteristics of the original data. In the realm of language or text, word embeddings represent words as numerical vectors in a continuous space.
+
+**Why Use Vectors/Embeddings?**
+
+Efficiently comparing documents to user queries during the RAG process, a crucial step in finding relevant documents, relies on computing similarity (or distance) between documents and queries. Vectorizing documents significantly speeds up this process.
+
+## The Ingestion Process
+
+The ingestion process varies based on the data source, operating as a one-shot or continuous process, possibly within a data streaming architecture where each message is treated as a document.
+
+To illustrate document creation, the following code exemplifies creating a Document from a text file:
+
+```java
+```
+
+A more complex scenario involves creating a Document from a CSV line:
+
+```java
+```
+
+Following document creation, the documents need to be ingested. The Quarkus LangChain4j extension offers _ingestor_ components for database storage.
+For instance, quarkus-langchain4j-redis stores data in a Redis database, while quarkus-langchain4j-chroma uses a Chroma database.
+
+The following code demonstrates document ingestion in a Redis database:
+
+```java
+```
+
+Adjust the `documentSplitter` parameter based on the data structure.
+For instance, for CSV files with document representation separated by `\n`, `new DocumentByLineSplitter(500, 0)` is a recommended starting point.
+
+## Retrieval Augmented Generation (RAG)
+
+Once documents are ingested, they can augment the LLM’s capabilities. The following code illustrates the creation of a `RetrievalAugmentor`:
+
+```java
+```
+
+**📌 NOTE**\
+This is the simplest example of retrieval augmentor, which only uses a
+`EmbeddingStoreContentRetriever` to retrieve documents from an embedding
+store to pass them directly to the LLM. A retrieval augmentor can use more
+sophisticated strategies to process queries, such as query compression,
+splitting a query into multiple queries and then routing them via different
+content retrievers (which may or may not be based on vector storage, but for
+example on a full-text search engine), using a scoring model to further
+filter the retrieved results, etc. For more information about advanced RAG
+strategies, refer to https://docs.langchain4j.dev/tutorials/rag/.
+
+The example above is a CDI bean that implements
+`Supplier<RetrievalAugmentor>`. An alternative way to wire things up is to
+create a CDI bean that directly implements `RetrievalAugmentor`, for example
+via a CDI producer, and letting Quarkus auto-discover it (by not specifying
+the `retrievalAugmentor` parameter of the `@RegisterAiService` annotation).
+
+The EmbeddingStoreContentRetriever necessitates a configured embedding store
+(Redis, Chroma, etc.) and an embedding model. Configure the maximum number
+of documents to retrieve (e.g., 3 in the example) and set the minimum
+relevance score if required.
+
+Make sure that the number of documents is not too high (or document too large).
+More document you have, more data you are adding to the LLM context, and you may exceed the limit.
+
+An AI service does not use a retrieval augmentor by default, one needs to be configured explicitly via the `retrievalAugmentor` property of `@RegisterAiService` and the configured
+`Supplier<RetrievalAugmentor>` is expected to be a CDI bean.
